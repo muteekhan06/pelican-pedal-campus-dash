@@ -1,0 +1,71 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Generate Android Platform Files
+        run: |
+          cp pubspec.yaml pubspec.yaml.bak
+          flutter create --platforms=android --org com.pelicanpedal --project-name pelican_pedal_app .
+          mv pubspec.yaml.bak pubspec.yaml
+
+      - name: Configure AndroidManifest (Internet & Landscape)
+        run: |
+          python3 - << 'EOF'
+          path = "android/app/src/main/AndroidManifest.xml"
+          with open(path, "r") as f:
+              xml = f.read()
+          if "android.permission.INTERNET" not in xml:
+              xml = xml.replace("<application", '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
+          xml = xml.replace('android:launchMode="singleTop"', 'android:launchMode="singleTop"\n            android:screenOrientation="sensorLandscape"', 1)
+          with open(path, "w") as f:
+              f.write(xml)
+          EOF
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Release APK
+        run: flutter build apk --release
+
+      - name: Rename Final APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk PelicanPedal-CampusDash.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PelicanPedal-CampusDash-APK
+          path: PelicanPedal-CampusDash.apk
+
+      - name: Publish GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Pelican Pedal v1.0.${{ github.run_number }}
+          body: "Automated Flutter Android APK build for Pelican Pedal: Campus Dash."
+          files: PelicanPedal-CampusDash.apk

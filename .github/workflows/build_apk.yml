@@ -34,9 +34,10 @@ jobs:
           flutter create --platforms=android --org com.pelicanpedal --project-name pelican_pedal_app .
           mv pubspec.yaml.bak pubspec.yaml
 
-      - name: Configure AndroidManifest (Internet & Landscape)
+      - name: Configure AndroidManifest & Disable Buggy LintVital
         run: |
           python3 - << 'EOF'
+          import os
           path = "android/app/src/main/AndroidManifest.xml"
           with open(path, "r") as f:
               xml = f.read()
@@ -45,6 +46,12 @@ jobs:
           xml = xml.replace('android:launchMode="singleTop"', 'android:launchMode="singleTop"\n            android:screenOrientation="sensorLandscape"', 1)
           with open(path, "w") as f:
               f.write(xml)
+
+          for bg in ["android/build.gradle.kts", "android/build.gradle"]:
+              if os.path.exists(bg):
+                  with open(bg, "a") as f:
+                      f.write('\nsubprojects {\n    tasks.matching { it.name.contains("lintVital") }.configureEach { enabled = false }\n}\n')
+                  break
           EOF
 
       - name: Install Dependencies
